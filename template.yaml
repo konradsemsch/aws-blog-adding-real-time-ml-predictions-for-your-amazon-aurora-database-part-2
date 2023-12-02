@@ -1,0 +1,327 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+
+  ###########################
+  ### Editable parameters ###
+  ###########################
+
+  DefaultVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select the default VPC. The database will be created in it. Used to define DB security group.
+  DefaultRouteTableId:
+    Type: String
+    Description: Select the default route table.
+  SubnetId1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet id where the Cloud9 instance will be deployed  
+  SubnetId2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet id where the Cloud9 instance will be deployed      
+  DBUsername:
+    Type: String
+    Description: Name of the master user
+
+  ########################
+  ### Fixed parameters ###
+  ########################
+
+  ModelName:
+    Type: String
+    Default: churn-prediction-model
+    Description: The SageMaker model name
+  EndpointConfigName:
+    Type: String
+    Default: churn-prediction-endpoint-config
+    Description: The SageMaker model endpoint config name
+  EndpointName:
+    Type: String
+    Default: churn-prediction-endpoint
+    Description: The SageMaker model endpoint name used 
+
+Resources:
+
+  #######################
+  ### Cloud9 Instance ###
+  #######################
+
+  Cloud9Instance:
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties:
+      Name: aurora-ml
+      Description: Cloud9 IDE Instance used to interact with the RDS Aurora Cluster
+      InstanceType: t2.large
+      ImageId: ubuntu-18.04-x86_64
+      AutomaticStopTimeMinutes: 30
+      ConnectionType: CONNECT_SSM
+      SubnetId: !Ref SubnetId1
+
+  #######################
+  ### Secrets Manager ###
+  #######################
+
+  MasterPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: '/rds/database-aurora-ml-master-password'
+      Description: Aurora database master password
+      GenerateSecretString:
+        PasswordLength: 16
+        ExcludePunctuation: true
+ 
+  MasterUsername:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: '/rds/database-aurora-ml-master-username'
+      Description: Aurora database master user
+      SecretString: !Ref DBUsername
+
+  #######################
+  ###      Aurora     ###
+  #######################
+
+  AuroraDbIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: AuroraMlSageMakerEndpointInvocationRole
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - rds.amazonaws.com          
+            Action:
+              - sts:AssumeRole
+      Path: /      
+      Policies:
+        - PolicyName: aurora-ml-sagemaker-endpoint-access
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: AllowAuroraToInvokeSagemakerEndpoint
+                Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: !Ref SageMakerEndpoint
+
+  AuroraDBParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      DBClusterParameterGroupName : aurora-ml-db-cluster-parameter-group
+      Description: Aurora ML cluster parameter group
+      Family: aurora-mysql8.0
+      Parameters:
+        aws_default_sagemaker_role: !GetAtt AuroraDbIamRole.Arn
+
+  AuroraDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: aurora-ml-subnet-group
+      DBSubnetGroupDescription: aurora-ml-subnet-group
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: database-aurora-ml
+      Engine: aurora-mysql
+      EngineMode: provisioned
+      EngineVersion: 8.0.mysql_aurora.3.03.1
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      DBClusterParameterGroupName: !Ref AuroraDBParameterGroup
+      AssociatedRoles: 
+        - RoleArn: !GetAtt AuroraDbIamRole.Arn
+      VpcSecurityGroupIds:
+        - !Ref StackSecurityGroup
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MasterUsername, '}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MasterPassword, '}}' ]]        
+      StorageEncrypted: true
+      SnapshotIdentifier: arn:aws:rds:us-east-1:000084518263:cluster-snapshot:database-aurora-ml-v3
+  
+  AuroraDBInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: AuroraDBCluster
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: database-aurora-ml
+      DBInstanceIdentifier: database-aurora-ml-instance-1
+      DBInstanceClass: db.t3.large
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      PubliclyAccessible: false
+
+  #######################
+  ###    SageMaker    ###
+  #######################
+
+  SageMakerIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: SageMakerEndpointAuroraInteractionRole
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - sagemaker.amazonaws.com          
+            Action:
+              - sts:AssumeRole
+      Path: /      
+      Policies:
+        - PolicyName: sagemaker-aurora-access
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+                -
+                  Effect: Allow
+                  Action:
+                      - ec2:DescribeVpcEndpoints
+                      - ec2:DescribeDhcpOptions
+                      - ec2:DescribeVpcs
+                      - ec2:DescribeSubnets
+                      - ec2:DescribeSecurityGroups
+                      - ec2:DescribeNetworkInterfaces
+                      - ec2:DeleteNetworkInterfacePermission
+                      - ec2:DeleteNetworkInterface
+                      - ec2:CreateNetworkInterfacePermission
+                      - ec2:CreateNetworkInterface
+                  Resource: '*'
+                -
+                  Effect: Allow
+                  Action: kms:Decrypt
+                  Resource: '*'
+                -
+                  Effect: Allow
+                  Action: logs:CreateLogStream
+                  Resource: '*'
+                - 
+                  Effect: Allow
+                  Action: s3:GetObject
+                  Resource: 
+                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
+                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+                - 
+                  Effect: Allow
+                  Action: s3:ListBucket
+                  Resource: '*'
+
+  SageMakerModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Ref ModelName
+      ExecutionRoleArn: arn:aws:iam::000084518263:role/service-role/AmazonSageMaker-ExecutionRole-20220819T183889 # !GetAtt SageMakerIamRole.Arn
+      EnableNetworkIsolation: false
+      Containers:
+          -
+              Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-sklearn-automl:2.5-1-cpu-py3'
+              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+              Environment:
+                  AUTOML_SPARSE_ENCODE_RECORDIO_PROTOBUF: '1'
+                  AUTOML_TRANSFORM_MODE: feature-transform
+                  SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT: application/x-recordio-protobuf
+                  SAGEMAKER_PROGRAM: sagemaker_serve
+                  SAGEMAKER_SUBMIT_DIRECTORY: /opt/ml/model/code
+          -
+              Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-xgboost:1.3-1-cpu-py3'
+              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
+              Environment:
+                  MAX_CONTENT_LENGTH: '20971520'
+                  SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT: text/csv
+                  SAGEMAKER_INFERENCE_OUTPUT: predicted_label
+                  SAGEMAKER_INFERENCE_SUPPORTED: 'predicted_label,probability,probabilities'
+          -
+              Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-sklearn-automl:2.5-1-cpu-py3'
+              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+              Environment:
+                  AUTOML_TRANSFORM_MODE: inverse-label-transform
+                  SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT: text/csv
+                  SAGEMAKER_INFERENCE_INPUT: predicted_label
+                  SAGEMAKER_INFERENCE_OUTPUT: predicted_label
+                  SAGEMAKER_INFERENCE_SUPPORTED: 'predicted_label,probability,labels,probabilities'
+                  SAGEMAKER_PROGRAM: sagemaker_serve
+                  SAGEMAKER_SUBMIT_DIRECTORY: /opt/ml/model/code
+      VpcConfig: 
+        SecurityGroupIds: 
+          - !Ref StackSecurityGroup
+        Subnets: 
+          - !Ref SubnetId1
+          - !Ref SubnetId2
+  
+  SageMakerEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    DependsOn: SageMakerModel
+    Properties:
+      EndpointConfigName: churn-prediction-endpoint-config
+      ProductionVariants:
+        - 
+          ModelName: !Ref ModelName
+          VariantName: main
+          InitialInstanceCount: 1
+          InstanceType: ml.m5.large
+          InitialVariantWeight: 1.0
+  
+  SageMakerEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    DependsOn: 
+      - SageMakerEndpointConfig
+      - VpcS3Endpoint
+    Properties:
+      EndpointName: !Ref EndpointName
+      EndpointConfigName: !Ref EndpointConfigName
+      RetainAllVariantProperties: true
+
+  ###################################
+  ###   Networking Configuration  ###
+  ###################################
+
+  StackSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Aurora instance and SageMaker endpoint security group
+      VpcId: !Ref DefaultVpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  StackSecurityGroupIngress:
+      Type: AWS::EC2::SecurityGroupIngress
+      DependsOn: StackSecurityGroup
+      Properties:
+        GroupId: !Ref StackSecurityGroup
+        IpProtocol: -1
+        SourceSecurityGroupId: !Ref StackSecurityGroup
+
+  VpcS3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties: 
+      VpcEndpointType: 'Gateway'
+      VpcId: !Ref DefaultVpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds:
+        - !Ref DefaultRouteTableId
+
+  VpcSageMakerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties: 
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref DefaultVpcId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sagemaker.runtime'
+      PrivateDnsEnabled: true
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      SecurityGroupIds: 
+        - !Ref StackSecurityGroup
+
+Outputs:
+  Cloud9InstanceURL:
+    Description: Cloud9 IDE URL
+    Value: !Sub "https://console.aws.amazon.com/cloud9/ide/${Cloud9Instance}"
+  ModelEndpointName:
+    Description: Name of the SageMaker endpoint to be used in the SQL `predict_churn` function
+    Value: !Ref EndpointName
