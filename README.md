@@ -1,0 +1,12 @@
+# Adding real-time ML predictions for your Amazon Aurora database (Part-2)
+
+*Konrad Semsch, Senior ML Solutions Architect, AWS Data Lab*
+*Rodrigo Merino, AI/ML Specialist Solutions Architect Manager*
+
+This is the second post of a two-part series about integrating machine learning (ML) predictions of your Amazon Aurora database and Amazon SageMaker. In [Part 1](https://aws.amazon.com/blogs/database/part-1-adding-real-time-machine-learning-predictions-to-amazon-aurora/),  you learned how to build a customer churn ML model with Autopilot, set up the [Amazon Aurora Machine Learning](https://aws.amazon.com/rds/aurora/machine-learning/) (Aurora ML) and [Amazon SageMaker](https://aws.amazon.com/sagemaker/) integration and invoke the Amazon SageMaker Endpoint from an Amazon Aurora cluster with a SQL function to retrieve model predictions for an entire an database (DB) table in real-time.
+
+In this post, you will learn how to implement [Aurora ML performance optimizations](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/mysql-ml.html#using-amazon-sagemaker-to-run-your-own-ml-models) to perform real-time inference against a SageMaker Endpoint at a large scale. More specifically, you will simulate an OLTP workload against the DB, where multiple clients are making simultaneous calls against the database and are putting the SageMaker Endpoint under stress to respond to thousands of requests in a short time window. Moreover, you will discover how to make use of [SQL triggers](https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-mysql-migration-playbook/chap-sql-server-aurora-mysql.tsql.triggers.html#chap-sql-server-aurora-mysql.tsql.triggers.mysql:~:text=Server%20documentation.-,MySQL%20Usage,-Amazon%20Aurora%20MySQL) to create an automatic orchestration pipeline for your predictive workload without using additional services.
+
+This solution enables your business users to  have up-to-date data, including your explanatory variables as well as real-time forecasted values returned by the ML model, in business intelligence reports and dashboards; without the need for additional extract, transform, and load (ETL) workloads. 
+
+The goal of the post is to demonstrate how to perform Aurora ML and Amazon SageMaker integration end-to-end, perform its stress testing, as well as to analyze various performance metrics of this solution. Sample code and AWS CloudFormation template are available in this GitHub repo. 
