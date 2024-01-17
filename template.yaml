@@ -68,6 +68,7 @@ Resources:
       GenerateSecretString:
         PasswordLength: 16
         ExcludePunctuation: true
+      KmsKeyId: aws/secretsmanager
  
   MasterUsername:
     Type: AWS::SecretsManager::Secret
@@ -75,6 +76,7 @@ Resources:
       Name: '/rds/database-aurora-ml-master-username'
       Description: Aurora database master user
       SecretString: !Ref DBUsername
+      KmsKeyId: aws/secretsmanager
 
   #######################
   ###      Aurora     ###
@@ -83,7 +85,7 @@ Resources:
   AuroraDbIamRole:
     Type: AWS::IAM::Role
     Properties: 
-      RoleName: AuroraMlSageMakerEndpointInvocationRole
+      # RoleName: AuroraMlSageMakerEndpointInvocationRole
       AssumeRolePolicyDocument: 
         Version: 2012-10-17
         Statement:
@@ -160,7 +162,7 @@ Resources:
   SageMakerIamRole:
     Type: AWS::IAM::Role
     Properties: 
-      RoleName: SageMakerEndpointAuroraInteractionRole
+      # RoleName: SageMakerEndpointAuroraInteractionRole
       AssumeRolePolicyDocument: 
         Version: 2012-10-17
         Statement:
@@ -214,7 +216,7 @@ Resources:
     Type: AWS::SageMaker::Model
     Properties:
       ModelName: !Ref ModelName
-      ExecutionRoleArn: arn:aws:iam::000084518263:role/service-role/AmazonSageMaker-ExecutionRole-20220819T183889 # !GetAtt SageMakerIamRole.Arn
+      ExecutionRoleArn: !GetAtt SageMakerIamRole.Arn
       EnableNetworkIsolation: false
       Containers:
           -
@@ -284,16 +286,24 @@ Resources:
     Properties:
       GroupDescription: Aurora instance and SageMaker endpoint security group
       VpcId: !Ref DefaultVpcId
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+      # SecurityGroupEgress:
+      #   - IpProtocol: tcp
+      #     CidrIp: 0.0.0.0/0
+
+  StackSecurityGroupEgress:
+      Type: AWS::EC2::SecurityGroupEgress
+      Properties:
+        Description: Define egress rules between the Aurora instance and Sagemaker endpoint
+        GroupId: !Ref StackSecurityGroup
+        IpProtocol: tcp
+        DestinationSecurityGroupId: !Ref StackSecurityGroup
 
   StackSecurityGroupIngress:
       Type: AWS::EC2::SecurityGroupIngress
-      DependsOn: StackSecurityGroup
       Properties:
+        Description: Define egress rules between the Aurora instance and Sagemaker endpoint
         GroupId: !Ref StackSecurityGroup
-        IpProtocol: -1
+        IpProtocol: tcp
         SourceSecurityGroupId: !Ref StackSecurityGroup
 
   VpcS3Endpoint:
