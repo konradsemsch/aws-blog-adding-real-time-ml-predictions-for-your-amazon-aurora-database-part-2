@@ -68,7 +68,6 @@ Resources:
       GenerateSecretString:
         PasswordLength: 16
         ExcludePunctuation: true
-      KmsKeyId: aws/secretsmanager
  
   MasterUsername:
     Type: AWS::SecretsManager::Secret
@@ -76,7 +75,6 @@ Resources:
       Name: '/rds/database-aurora-ml-master-username'
       Description: Aurora database master user
       SecretString: !Ref DBUsername
-      KmsKeyId: aws/secretsmanager
 
   #######################
   ###      Aurora     ###
@@ -85,7 +83,6 @@ Resources:
   AuroraDbIamRole:
     Type: AWS::IAM::Role
     Properties: 
-      # RoleName: AuroraMlSageMakerEndpointInvocationRole
       AssumeRolePolicyDocument: 
         Version: 2012-10-17
         Statement:
@@ -162,7 +159,6 @@ Resources:
   SageMakerIamRole:
     Type: AWS::IAM::Role
     Properties: 
-      # RoleName: SageMakerEndpointAuroraInteractionRole
       AssumeRolePolicyDocument: 
         Version: 2012-10-17
         Statement:
@@ -204,9 +200,8 @@ Resources:
                   Effect: Allow
                   Action: s3:GetObject
                   Resource: 
-                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
-                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
-                    - 'arn:aws:s3:::ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+                    - 'arn:aws:s3:::aws-blog-real-time-ml-predictions-in-amazon-aurora-db-part-2/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+                    - 'arn:aws:s3:::aws-blog-real-time-ml-predictions-in-amazon-aurora-db-part-2/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
                 - 
                   Effect: Allow
                   Action: s3:ListBucket
@@ -221,7 +216,7 @@ Resources:
       Containers:
           -
               Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-sklearn-automl:2.5-1-cpu-py3'
-              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+              ModelDataUrl: 's3://aws-blog-real-time-ml-predictions-in-amazon-aurora-db-part-2/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
               Environment:
                   AUTOML_SPARSE_ENCODE_RECORDIO_PROTOBUF: '1'
                   AUTOML_TRANSFORM_MODE: feature-transform
@@ -230,7 +225,7 @@ Resources:
                   SAGEMAKER_SUBMIT_DIRECTORY: /opt/ml/model/code
           -
               Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-xgboost:1.3-1-cpu-py3'
-              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
+              ModelDataUrl: 's3://aws-blog-real-time-ml-predictions-in-amazon-aurora-db-part-2/automl-churn-22-07-58-14/tuning/automl-chu-dpp4-xgb/automl-churn-22-07-58-141qfYgxKy-019-576d554c/output/model.tar.gz'
               Environment:
                   MAX_CONTENT_LENGTH: '20971520'
                   SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT: text/csv
@@ -238,7 +233,7 @@ Resources:
                   SAGEMAKER_INFERENCE_SUPPORTED: 'predicted_label,probability,probabilities'
           -
               Image: '683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-sklearn-automl:2.5-1-cpu-py3'
-              ModelDataUrl: 's3://ksemsch-priv-blogs/aurora/sagemaker/DEMO-autopilot-churn/output/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
+              ModelDataUrl: 's3://aws-blog-real-time-ml-predictions-in-amazon-aurora-db-part-2/automl-churn-22-07-58-14/data-processor-models/automl-churn-22-07-58-14-dpp4-1-fd558818369c4e17b96a1d3ab7df5e0/output/model.tar.gz'
               Environment:
                   AUTOML_TRANSFORM_MODE: inverse-label-transform
                   SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT: text/csv
@@ -286,9 +281,6 @@ Resources:
     Properties:
       GroupDescription: Aurora instance and SageMaker endpoint security group
       VpcId: !Ref DefaultVpcId
-      # SecurityGroupEgress:
-      #   - IpProtocol: tcp
-      #     CidrIp: 0.0.0.0/0
 
   StackSecurityGroupEgress:
       Type: AWS::EC2::SecurityGroupEgress
@@ -296,7 +288,9 @@ Resources:
         Description: Define egress rules between the Aurora instance and Sagemaker endpoint
         GroupId: !Ref StackSecurityGroup
         IpProtocol: tcp
-        DestinationSecurityGroupId: !Ref StackSecurityGroup
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
 
   StackSecurityGroupIngress:
       Type: AWS::EC2::SecurityGroupIngress
@@ -304,6 +298,8 @@ Resources:
         Description: Define egress rules between the Aurora instance and Sagemaker endpoint
         GroupId: !Ref StackSecurityGroup
         IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
         SourceSecurityGroupId: !Ref StackSecurityGroup
 
   VpcS3Endpoint:
