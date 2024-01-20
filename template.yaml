@@ -280,7 +280,17 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Aurora instance and SageMaker endpoint security group
-      VpcId: !Ref DefaultVpcId
+      VpcId: !Ref DefaultVpcId          
+
+  StackSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Define egress rules between the Aurora instance and Sagemaker endpoint
+      GroupId: !Ref StackSecurityGroup
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref StackSecurityGroup
 
   StackSecurityGroupEgress:
       Type: AWS::EC2::SecurityGroupEgress
@@ -288,19 +298,9 @@ Resources:
         Description: Define egress rules between the Aurora instance and Sagemaker endpoint
         GroupId: !Ref StackSecurityGroup
         IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
+        FromPort: 0
+        ToPort: 65535
         CidrIp: 0.0.0.0/0
-
-  StackSecurityGroupIngress:
-      Type: AWS::EC2::SecurityGroupIngress
-      Properties:
-        Description: Define egress rules between the Aurora instance and Sagemaker endpoint
-        GroupId: !Ref StackSecurityGroup
-        IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        SourceSecurityGroupId: !Ref StackSecurityGroup
 
   VpcS3Endpoint:
     Type: AWS::EC2::VPCEndpoint
