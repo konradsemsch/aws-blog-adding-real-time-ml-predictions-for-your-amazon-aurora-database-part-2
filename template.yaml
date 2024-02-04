@@ -53,7 +53,7 @@ Resources:
       InstanceType: t2.large
       ImageId: ubuntu-18.04-x86_64
       AutomaticStopTimeMinutes: 30
-      ConnectionType: CONNECT_SSM
+      ConnectionType: CONNECT_SSH
       SubnetId: !Ref SubnetId1
 
   #######################
@@ -137,8 +137,7 @@ Resources:
         - !Ref StackSecurityGroup
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MasterUsername, '}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MasterPassword, '}}' ]]        
-      StorageEncrypted: true
-      SnapshotIdentifier: arn:aws:rds:us-east-1:000084518263:cluster-snapshot:database-aurora-ml-v3
+      StorageEncrypted: false
   
   AuroraDBInstance:
     Type: AWS::RDS::DBInstance
