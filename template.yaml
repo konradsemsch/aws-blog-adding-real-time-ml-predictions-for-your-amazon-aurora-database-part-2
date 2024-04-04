@@ -60,6 +60,20 @@ Resources:
   ### Secrets Manager ###
   #######################
 
+  MasterSecretsKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key used to encrypt database secrets in AWS SecretsManager
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal: '*'
+            Action: 'kms:*'
+            Resource: '*'
+
   MasterPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -68,6 +82,7 @@ Resources:
       GenerateSecretString:
         PasswordLength: 16
         ExcludePunctuation: true
+      KmsKeyId: !Ref MasterSecretsKMSKey
  
   MasterUsername:
     Type: AWS::SecretsManager::Secret
@@ -75,6 +90,7 @@ Resources:
       Name: '/rds/database-aurora-ml-master-username'
       Description: Aurora database master user
       SecretString: !Ref DBUsername
+      KmsKeyId: !Ref MasterSecretsKMSKey
 
   #######################
   ###      Aurora     ###
@@ -174,6 +190,7 @@ Resources:
             Version: 2012-10-17
             Statement:
                 -
+                  # As per recommendation here: https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html#:~:text=amazonaws.com/*%22%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%5D%20%0A%20%20%20%20%20%20%20%20%20%7D%20%0A%20%20%20%20%5D%20%0A%7D-,Add%20Permissions%20for%20Endpoint%20Access%20for%20Containers%20Running%20in%20a%20VPC%20to%20Custom%20IAM%20Policies,-The%20SageMakerFullAccess%20managed
                   Effect: Allow
                   Action:
                       - ec2:DescribeVpcEndpoints
@@ -241,6 +258,7 @@ Resources:
                   SAGEMAKER_INFERENCE_SUPPORTED: 'predicted_label,probability,labels,probabilities'
                   SAGEMAKER_PROGRAM: sagemaker_serve
                   SAGEMAKER_SUBMIT_DIRECTORY: /opt/ml/model/code
+      # As per recommendation here: https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html
       VpcConfig: 
         SecurityGroupIds: 
           - !Ref StackSecurityGroup
@@ -299,7 +317,8 @@ Resources:
         IpProtocol: tcp
         FromPort: 0
         ToPort: 65535
-        CidrIp: 0.0.0.0/0
+        DestinationSecurityGroupId: !Ref StackSecurityGroup
+        # CidrIp: 0.0.0.0/0
 
   VpcS3Endpoint:
     Type: AWS::EC2::VPCEndpoint
